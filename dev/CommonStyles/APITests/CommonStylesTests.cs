@@ -18,6 +18,7 @@ using OSVersion = Common.OSVersion;
 using System.Collections.Generic;
 using XamlControlsResources = Microsoft.UI.Xaml.Controls.XamlControlsResources;
 using Windows.UI.Xaml.Markup;
+using System;
 
 #if USING_TAEF
 using WEX.TestExecution;
@@ -33,6 +34,12 @@ namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests
     [TestClass]
     public class CommonStylesApiTests
     {
+        [TestCleanup]
+        public void TestCleanup()
+        {
+            TestUtilities.ClearVisualTreeRoot();
+        }
+
         [TestMethod]
         public void VerifyUseCompactResourcesAPI()
         {
@@ -100,7 +107,7 @@ namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests
         }
 
         [TestMethod]
-        public void VerifyVisualTreeForControls()
+        public void VerifyVisualTreeForControlsInCommonStyles()
         {
             if(PlatformConfiguration.IsOSVersionLessThan(OSVersion.NineteenH1))
             {
@@ -108,12 +115,10 @@ namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests
             }
 
             var controlsToVerify = new List<string> {
-               "AppBarButton", "AppBarToggleButton", "AutoSuggestBox", "Button", "CalendarDatePicker", "CalendarView",
-               "CheckBox", "ColorPicker", "ComboBox", "ComboBoxItem", "ContentDialog", "DatePicker", "DropDownButton",
-               "FlipView", "ListViewItem", "MenuBar", "NavigationView", "NavigationViewItem", "ParallaxView", "PasswordBox",
-               "PersonPicture", "Pivot", "PivotItem", "RadioButton", "RadioMenuFlyoutItem", "RatingControl", "RefreshContainer",
-               "RichEditBox", "Scroller", "Slider", "SplitButton", "SplitView", "SwipeControl", "TextBox", "TimePicker",
-               "ToggleButton", "ToggleSwitch", "ToolTip", "TreeView", "TreeViewItem", "TwoPaneView"};
+                "AppBarButton", "AppBarToggleButton", "Button", "CheckBox", "ComboBox",
+                "ComboBoxItem", "ContentDialog", "DatePicker", "FlipView", "ListViewItem",
+                "PasswordBox", "Pivot", "PivotItem", "RichEditBox", "Slider", "SplitView",
+                "TextBox", "TimePicker", "ToggleButton", "ToggleSwitch"};
 
             foreach (var control in controlsToVerify)
             {
@@ -125,8 +130,16 @@ namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests
         private string XamlStringForControl(string controlName)
         {
             return $@"<Grid Width='400' Height='400' xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'> 
-                          <{controlName}/>
+                          <{controlName} />
                    </Grid>";
+        }
+    }
+
+    class ControlVisualTreeTestFilter : VisualTreeDumper.DefaultFilter
+    {
+        public override bool ShouldVisitProperty(string propertyName)
+        {
+            return base.ShouldVisitProperty(propertyName) && !propertyName.Contains("RenderSize");
         }
     }
 

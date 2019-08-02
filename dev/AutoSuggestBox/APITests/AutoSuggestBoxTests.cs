@@ -37,19 +37,7 @@ namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests
                 return;
             }
 
-            AutoSuggestBox autoSuggestBox = null;
-            RunOnUIThread.Execute(() =>
-            {
-                autoSuggestBox = new AutoSuggestBox();
-                List<string> suggestions = new List<string> 
-                {
-                    "Item 1", "Item 2", "Item 3"
-                };
-                autoSuggestBox.ItemsSource = suggestions;
-            });
-            IdleSynchronizer.Wait();
-            Verify.IsNotNull(autoSuggestBox);
-            TestUtilities.SetAsVisualTreeRoot(autoSuggestBox);
+            var autoSuggestBox = SetupAutoSuggestBox();
 
             RunOnUIThread.Execute(() =>
             {
@@ -68,6 +56,36 @@ namespace Windows.UI.Xaml.Tests.MUXControls.ApiTests
                 var popupBorder = popup.Child as Border;
                 Verify.AreEqual(new CornerRadius(0, 0, 2, 2), popupBorder.CornerRadius);
             });
+        }
+
+        [TestMethod]
+        public void VerifyVisualTree()
+        {
+            if (PlatformConfiguration.IsOSVersionLessThan(OSVersion.NineteenH1))
+            {
+                return;
+            }
+
+            var autoSuggestBox = SetupAutoSuggestBox();
+            VisualTreeTestHelper.VerifyVisualTree(root: autoSuggestBox, masterFilePrefix: "AutoSuggestBox");
+        }
+
+        private AutoSuggestBox SetupAutoSuggestBox()
+        {
+            AutoSuggestBox autoSuggestBox = null;
+            RunOnUIThread.Execute(() =>
+            {
+                autoSuggestBox = new AutoSuggestBox();
+                List<string> suggestions = new List<string>
+                {
+                    "Item 1", "Item 2", "Item 3"
+                };
+                autoSuggestBox.ItemsSource = suggestions;
+                autoSuggestBox.Width = 400;
+            });
+            TestUtilities.SetAsVisualTreeRoot(autoSuggestBox);
+            Verify.IsNotNull(autoSuggestBox);
+            return autoSuggestBox;
         }
 
     }
