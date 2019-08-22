@@ -8,37 +8,72 @@
 
 #include "TabView.g.h"
 #include "TabView.properties.h"
-#include "TabViewTabClosingEventArgs.g.h"
-#include "TabViewTabDraggedOutsideEventArgs.g.h"
+#include "TabViewTabCloseRequestedEventArgs.g.h"
+#include "TabViewTabDroppedOutsideEventArgs.g.h"
+#include "TabViewTabDragStartingEventArgs.g.h"
+#include "TabViewTabDragCompletedEventArgs.g.h"
+#include "DispatcherHelper.h"
 
-class TabViewTabClosingEventArgs :
-    public winrt::implementation::TabViewTabClosingEventArgsT<TabViewTabClosingEventArgs>
+class TabViewTabCloseRequestedEventArgs :
+    public winrt::implementation::TabViewTabCloseRequestedEventArgsT<TabViewTabCloseRequestedEventArgs>
 {
 public:
-    TabViewTabClosingEventArgs(winrt::IInspectable const& item) { m_item = item; }
-
-    bool Cancel() { return m_cancel; }
-    void Cancel(bool value) { m_cancel = value; }
+    TabViewTabCloseRequestedEventArgs(winrt::IInspectable const& item, winrt::TabViewItem tab) : m_item(item), m_tab(tab) {}
 
     winrt::IInspectable Item() { return m_item; }
+    winrt::TabViewItem Tab() { return m_tab; }
 
 private:
-    bool m_cancel{};
     winrt::IInspectable m_item{};
+    winrt::TabViewItem m_tab{};
 };
 
-class TabViewTabDraggedOutsideEventArgs :
-    public ReferenceTracker<TabViewTabDraggedOutsideEventArgs, winrt::implementation::TabViewTabDraggedOutsideEventArgsT, winrt::composing, winrt::composable>
+class TabViewTabDroppedOutsideEventArgs :
+    public winrt::implementation::TabViewTabDroppedOutsideEventArgsT<TabViewTabDroppedOutsideEventArgs>
 {
 public:
-    TabViewTabDraggedOutsideEventArgs(winrt::IInspectable const& item, winrt::TabViewItem tab) { m_item = item; m_tab.set(tab); }
+    TabViewTabDroppedOutsideEventArgs(winrt::IInspectable const& item, winrt::TabViewItem tab) : m_item(item), m_tab(tab) {}
 
     winrt::IInspectable Item() { return m_item; }
-    winrt::TabViewItem Tab() { return m_tab.get(); }
+    winrt::TabViewItem Tab() { return m_tab; }
 
 private:
     winrt::IInspectable m_item{};
-    tracker_ref<winrt::TabViewItem> m_tab{ this };
+    winrt::TabViewItem m_tab{};
+};
+
+class TabViewTabDragStartingEventArgs :
+    public winrt::implementation::TabViewTabDragStartingEventArgsT<TabViewTabDragStartingEventArgs>
+{
+public:
+    TabViewTabDragStartingEventArgs(winrt::DragItemsStartingEventArgs const& args, winrt::IInspectable const& item, winrt::TabViewItem tab) : m_args(args), m_item(item), m_tab(tab) {}
+
+    bool Cancel() { return m_args.Cancel(); }
+    void Cancel(bool value) { m_args.Cancel(value); }
+    winrt::DataPackage Data() { return m_args.Data(); }
+    winrt::IInspectable Item() { return m_item; }
+    winrt::TabViewItem Tab() { return m_tab; }
+
+private:
+    winrt::DragItemsStartingEventArgs m_args{};
+    winrt::IInspectable m_item{};
+    winrt::TabViewItem m_tab{};
+};
+
+class TabViewTabDragCompletedEventArgs :
+    public winrt::implementation::TabViewTabDragCompletedEventArgsT<TabViewTabDragCompletedEventArgs>
+{
+public:
+    TabViewTabDragCompletedEventArgs(winrt::DragItemsCompletedEventArgs const& args, winrt::IInspectable const& item, winrt::TabViewItem tab) : m_args(args), m_item(item), m_tab(tab) {}
+
+    winrt::DataPackageOperation DropResult() { return m_args.DropResult(); }
+    winrt::IInspectable Item() { return m_item; }
+    winrt::TabViewItem Tab() { return m_tab; }
+
+private:
+    winrt::DragItemsCompletedEventArgs m_args{ nullptr };
+    winrt::IInspectable m_item{};
+    winrt::TabViewItem m_tab{};
 };
 
 class TabView :
@@ -58,17 +93,20 @@ public:
     // From ListView
     winrt::DependencyObject ContainerFromItem(winrt::IInspectable const& item);
     winrt::DependencyObject ContainerFromIndex(int index);
+    winrt::IInspectable ItemFromContainer(winrt::DependencyObject const& container);
+
+    // Control
+    void OnKeyDown(winrt::KeyRoutedEventArgs const& e);
 
     // Internal
-    void OnItemsPropertyChanged(const winrt::DependencyPropertyChangedEventArgs& args);
-    void OnItemsSourcePropertyChanged(const winrt::DependencyPropertyChangedEventArgs& args);
     void OnTabWidthModePropertyChanged(const winrt::DependencyPropertyChangedEventArgs& args);
     void OnSelectedIndexPropertyChanged(const winrt::DependencyPropertyChangedEventArgs& args);
     void OnSelectedItemPropertyChanged(const winrt::DependencyPropertyChangedEventArgs& args);
 
     void OnItemsChanged(winrt::IInspectable const& item);
+    void UpdateTabContent();
 
-    void CloseTab(winrt::TabViewItem const& item);
+    void RequestCloseTab(winrt::TabViewItem const& item);
 
 private:
     void OnLoaded(const winrt::IInspectable& sender, const winrt::RoutedEventArgs& args);
@@ -87,13 +125,22 @@ private:
     void OnListViewDrop(const winrt::IInspectable& sender, const winrt::DragEventArgs& args);
 
     void OnCtrlF4Invoked(const winrt::KeyboardAccelerator& sender, const winrt::KeyboardAcceleratorInvokedEventArgs& args);
+    void OnCtrlTabInvoked(const winrt::KeyboardAccelerator& sender, const winrt::KeyboardAcceleratorInvokedEventArgs& args);
+    void OnCtrlShiftTabInvoked(const winrt::KeyboardAccelerator& sender, const winrt::KeyboardAcceleratorInvokedEventArgs& args);
 
-    void UpdateItemsSource();
+    bool RequestCloseCurrentTab();
+    bool SelectNextTab(int increment);
+
     void UpdateSelectedItem();
     void UpdateSelectedIndex();
 
-    void UpdateTabContent();
     void UpdateTabWidths();
+
+    void OnListViewGettingFocus(const winrt::IInspectable& sender, const winrt::GettingFocusEventArgs& args);
+
+    int GetItemCount();
+
+    winrt::TabViewItem FindTabViewItemFromDragItem(const winrt::IInspectable& item);
 
     tracker_ref<winrt::ColumnDefinition> m_leftContentColumn{ this };
     tracker_ref<winrt::ColumnDefinition> m_tabColumn{ this };
@@ -106,11 +153,10 @@ private:
     tracker_ref<winrt::Grid> m_tabContainerGrid{ this };
     tracker_ref<winrt::FxScrollViewer> m_scrollViewer{ this };
     tracker_ref<winrt::Button> m_addButton{ this };
-    tracker_ref<winrt::RepeatButton> m_scrollDecreaseButton{ this };
-    tracker_ref<winrt::RepeatButton> m_scrollIncreaseButton{ this };
 
     winrt::ListView::Loaded_revoker m_listViewLoadedRevoker{};
     winrt::Selector::SelectionChanged_revoker m_listViewSelectionChangedRevoker{};
+    winrt::UIElement::GettingFocus_revoker m_listViewGettingFocusRevoker{};
 
     winrt::ListView::DragItemsStarting_revoker m_listViewDragItemsStartingRevoker{};
     winrt::ListView::DragItemsCompleted_revoker m_listViewDragItemsCompletedRevoker{};
@@ -123,4 +169,6 @@ private:
 
     winrt::RepeatButton::Click_revoker m_scrollDecreaseClickRevoker{};
     winrt::RepeatButton::Click_revoker m_scrollIncreaseClickRevoker{};
+
+    DispatcherHelper m_dispatcherHelper{ *this };
 };

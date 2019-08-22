@@ -21,6 +21,7 @@ using Microsoft.Windows.Apps.Test.Foundation;
 using Microsoft.Windows.Apps.Test.Foundation.Controls;
 using Microsoft.Windows.Apps.Test.Foundation.Patterns;
 using Microsoft.Windows.Apps.Test.Foundation.Waiters;
+using Windows.UI.Xaml.Media;
 
 namespace Windows.UI.Xaml.Tests.MUXControls.InteractionTests
 {
@@ -97,15 +98,20 @@ namespace Windows.UI.Xaml.Tests.MUXControls.InteractionTests
         }
 
         [TestMethod]
-        public void TabSizeTest()
+        public void TabSizeAndScrollButtonsTest()
         {
             using (var setup = new TestSetupHelper("TabView Tests"))
             {
                 UIObject smallerTab = FindElement.ByName("FirstTab");
                 UIObject largerTab = FindElement.ByName("LongHeaderTab");
 
+                FindElement.ByName<Button>("SetTabViewWidth").InvokeAndWait();
+
+                Verify.IsFalse(AreScrollButtonsVisible(), "Scroll buttons should not be visible");
+
                 Log.Comment("Equal size tabs should all be the same size.");
-                Verify.AreEqual(smallerTab.BoundingRectangle.Width, largerTab.BoundingRectangle.Width);
+                int diff = Math.Abs(largerTab.BoundingRectangle.Width - smallerTab.BoundingRectangle.Width);
+                Verify.IsLessThanOrEqual(diff, 1);
 
                 Log.Comment("Changing tab width mode to SizeToContent.");
                 ComboBox tabWidthComboBox = FindElement.ByName<ComboBox>("TabWidthComboBox");
@@ -114,6 +120,53 @@ namespace Windows.UI.Xaml.Tests.MUXControls.InteractionTests
 
                 Log.Comment("Tab with larger content should be wider.");
                 Verify.IsGreaterThan(largerTab.BoundingRectangle.Width, smallerTab.BoundingRectangle.Width);
+
+                // With largerTab now rendering wider, the scroll buttons should appear:
+                Verify.IsTrue(AreScrollButtonsVisible(), "Scroll buttons should appear");
+
+                // Close a tab to make room. The scroll buttons should disappear:
+                Log.Comment("Closing a tab:");
+                Button closeButton = FindCloseButton(FindElement.ByName("LongHeaderTab"));
+                closeButton.InvokeAndWait();
+                VerifyElement.NotFound("LongHeaderTab", FindBy.Name);
+
+                Log.Comment("Scroll buttons should disappear");
+                Verify.IsFalse(AreScrollButtonsVisible(), "Scroll buttons should disappear");
+
+                // Make sure the scroll buttons can show up in 'Equal' sizing mode. 
+                Log.Comment("Changing tab width mode to Equal");
+                tabWidthComboBox.SelectItemByName("Equal");
+                Wait.ForIdle();
+                Verify.IsFalse(AreScrollButtonsVisible(), "Scroll buttons should not be visible");
+
+                var addButton = FindElement.ByName<Button>("Add New Tab");
+                Verify.IsNotNull(addButton, "addButton should be available");
+                Log.Comment("Adding a tab");
+                addButton.InvokeAndWait();
+                Verify.IsFalse(AreScrollButtonsVisible(), "Scroll buttons should not be visible");
+                Log.Comment("Adding another tab");
+                addButton.InvokeAndWait();
+
+                Verify.IsTrue(AreScrollButtonsVisible(), "Scroll buttons should appear");
+            }
+        }
+
+        private bool AreScrollButtonsVisible()
+        {
+            FindElement.ByName<Button>("GetScrollButtonsVisible").InvokeAndWait();
+            var scrollButtonsVisible = FindElement.ByName<TextBlock>("ScrollButtonsVisible").DocumentText;
+            if(scrollButtonsVisible == "True")
+            {
+                return true;
+            }
+            else if(scrollButtonsVisible == "False")
+            {
+                return false;
+            }
+            else
+            {
+                Verify.Fail(string.Format("Unexpected value for ScrollButtonsVisible: '{0}'", scrollButtonsVisible));
+                return false;
             }
         }
 
@@ -130,7 +183,9 @@ namespace Windows.UI.Xaml.Tests.MUXControls.InteractionTests
                 Verify.AreEqual(selectedIndexTextBlock.DocumentText, "0");
 
                 Log.Comment("When the selected tab is closed, selection should move to the next one.");
+                // Use Tab's close button:
                 closeButton.InvokeAndWait();
+                VerifyElement.NotFound("FirstTab", FindBy.Name);
                 Verify.AreEqual(selectedIndexTextBlock.DocumentText, "0");
 
                 Log.Comment("Select last tab.");
@@ -140,15 +195,17 @@ namespace Windows.UI.Xaml.Tests.MUXControls.InteractionTests
                 Verify.AreEqual(selectedIndexTextBlock.DocumentText, "3");
 
                 Log.Comment("When the selected tab is last and is closed, selection should move to the previous item.");
-                closeButton = FindCloseButton(lastTab);
-                Verify.IsNotNull(closeButton);
-                closeButton.InvokeAndWait();
+
+                // Use Middle Click to close the tab:
+                lastTab.Click(PointerButtons.Middle);
+                Wait.ForIdle();
+                VerifyElement.NotFound("LastTab", FindBy.Name);
                 Verify.AreEqual(selectedIndexTextBlock.DocumentText, "2");
             }
         }
 
         [TestMethod]
-        public void IsCloseableTest()
+        public void IsClosableTest()
         {
             using (var setup = new TestSetupHelper("TabView Tests"))
             {
@@ -156,48 +213,27 @@ namespace Windows.UI.Xaml.Tests.MUXControls.InteractionTests
                 Button closeButton = FindCloseButton(firstTab);
                 Verify.IsNotNull(closeButton);
 
-                Log.Comment("Setting IsCloseable=false on the first tab.");
-                CheckBox isCloseableCheckBox = FindElement.ByName<CheckBox>("IsCloseableCheckBox");
-                isCloseableCheckBox.Uncheck();
+                Log.Comment("Setting IsClosable=false on the first tab.");
+                CheckBox isClosableCheckBox = FindElement.ByName<CheckBox>("IsClosableCheckBox");
+                isClosableCheckBox.Uncheck();
                 Wait.ForIdle();
 
                 ElementCache.Refresh();
                 closeButton = FindCloseButton(firstTab);
                 Verify.IsNull(closeButton);
 
-                Log.Comment("Setting IsCloseable=true on the first tab.");
-                isCloseableCheckBox.Check();
+                Log.Comment("Setting IsClosable=true on the first tab.");
+                isClosableCheckBox.Check();
                 Wait.ForIdle();
 
                 ElementCache.Refresh();
                 closeButton = FindCloseButton(firstTab);
                 Verify.IsNotNull(closeButton);
-
-                Log.Comment("Setting CanCloseTabs=false on the TabView.");
-                CheckBox canCloseCheckBox = FindElement.ByName<CheckBox>("CanCloseCheckBox");
-                canCloseCheckBox.Uncheck();
-                Wait.ForIdle();
-
-                ElementCache.Refresh();
-
-                Log.Comment("First close button should be visible because IsCloseable was set to true");
-                closeButton = FindCloseButton(firstTab);
-                Verify.IsNotNull(closeButton);
-
-                UIObject tab = FindElement.ByName("SecondTab");
-                Log.Comment("Second close button should be visible because IsCloseable was set to true in xaml");
-                closeButton = FindCloseButton(tab);
-                Verify.IsNotNull(closeButton);
-
-                tab = FindElement.ByName("LongHeaderTab");
-                Log.Comment("Third close button should not be visible because IsCloseable is still unset");
-                closeButton = FindCloseButton(tab);
-                Verify.IsNull(closeButton);
             }
         }
 
         [TestMethod]
-        public void CancelTabClosingTest()
+        public void HandleItemCloseRequestedTest()
         {
             using (var setup = new TestSetupHelper("TabView Tests"))
             {
@@ -205,39 +241,52 @@ namespace Windows.UI.Xaml.Tests.MUXControls.InteractionTests
                 Button closeButton = FindCloseButton(firstTab);
                 Verify.IsNotNull(closeButton);
 
-                CheckBox cancelCloseCheckBox = FindElement.ByName<CheckBox>("CancelCloseCheckBox");
-                cancelCloseCheckBox.Check();
+                CheckBox tabCloseRequestedCheckBox = FindElement.ByName<CheckBox>("HandleTabCloseRequestedCheckBox");
+                tabCloseRequestedCheckBox.Uncheck();
+                CheckBox tabItemCloseRequestedCheckBox = FindElement.ByName<CheckBox>("HandleTabItemCloseRequestedCheckBox");
+                tabItemCloseRequestedCheckBox.Check();
                 Wait.ForIdle();
 
-                Log.Comment("Clicking close button should not close tab if app returns cancel = true.");
-                closeButton.InvokeAndWait();
-
-                ElementCache.Refresh();
-                firstTab = TryFindElement.ByName("FirstTab");
-                Verify.IsNotNull(firstTab);
-
-                cancelCloseCheckBox.Uncheck();
-
-                CheckBox cancelItemCloseCheckBox = FindElement.ByName<CheckBox>("CancelItemCloseCheckBox");
-                cancelCloseCheckBox.Check();
-                Wait.ForIdle();
-
-                Log.Comment("Clicking close button should not close tab if the tab item returns cancel = true.");
-                closeButton.InvokeAndWait();
-
-                ElementCache.Refresh();
-                firstTab = TryFindElement.ByName("FirstTab");
-                Verify.IsNotNull(firstTab);
-
-                cancelCloseCheckBox.Uncheck();
-                Wait.ForIdle();
-
-                Log.Comment("Clicking close button should close tab if app doesn't handle either TabClosing event.");
+                Log.Comment("TabViewItem.CloseRequested should be raised when the close button is pressed.");
                 closeButton.InvokeAndWait();
 
                 ElementCache.Refresh();
                 firstTab = TryFindElement.ByName("FirstTab");
                 Verify.IsNull(firstTab);
+            }
+        }
+
+        [TestMethod]
+        public void DragBetweenTabViewsTest()
+        {
+            if (PlatformConfiguration.IsOSVersionLessThan(OSVersion.Redstone5))
+            {
+                // TODO 19727004: Re-enable this on versions below RS5 after fixing the bug where mouse click-and-drag doesn't work.
+                Log.Warning("This test relies on touch input, the injection of which is only supported in RS5 and up. Test is disabled.");
+                return;
+            }
+
+            using (var setup = new TestSetupHelper("TabView Tests"))
+            {
+                UIObject firstTab = FindElement.ByName("FirstTab");
+                Verify.IsNotNull(firstTab);
+
+                UIObject dropTarget = FindElement.ByName("TabInSecondTabView");
+                Verify.IsNotNull(dropTarget);
+
+                Log.Comment("Home tab should be in the first tab view.");
+                PressButtonAndVerifyText("GetFirstTabLocationButton", "FirstTabLocationTextBlock", "FirstTabView");
+
+                InputHelper.DragToTarget(firstTab, dropTarget);
+                Wait.ForIdle();
+                ElementCache.Refresh();
+
+                Log.Comment("Home tab should now be in the second tab view.");
+                PressButtonAndVerifyText("GetFirstTabLocationButton", "FirstTabLocationTextBlock", "SecondTabView");
+
+                Log.Comment("Home tab content should be visible.");
+                UIObject tabContent = FindElement.ByName("FirstTabContent");
+                Verify.IsNotNull(tabContent);
             }
         }
 
@@ -264,27 +313,109 @@ namespace Windows.UI.Xaml.Tests.MUXControls.InteractionTests
         [TestMethod]
         public void KeyboardTest()
         {
-            if (!PlatformConfiguration.IsOsVersionGreaterThanOrEqual(OSVersion.Redstone3))
-            {
-                Log.Warning("This test requires RS3+ functionality (specifically, KeyboardAccelerators)");
-                return;
-            }
-
             using (var setup = new TestSetupHelper("TabView Tests"))
             {
                 Log.Comment("Set focus inside the TabView");
                 UIObject tabContent = FindElement.ByName("FirstTabContent");
                 tabContent.SetFocus();
 
+                TabItem firstTab = FindElement.ByName<TabItem>("FirstTab");
+                TabItem secondTab = FindElement.ByName<TabItem>("SecondTab");
+                TabItem lastTab = FindElement.ByName<TabItem>("LastTab");
+
+                Button addButton = FindElement.ById<Button>("AddButton");
+
+                Verify.IsTrue(firstTab.IsSelected, "First Tab should be selected initially");
+                Button firstTabButton = FindElement.ByName<Button>("FirstTabButton");
+                Verify.IsTrue(firstTabButton.HasKeyboardFocus, "Focus should start in the First Tab");
+
+                // Ctrl+Tab to the second tab:
+                KeyboardHelper.PressKey(Key.Tab, ModifierKey.Control);
+                Verify.IsTrue(secondTab.IsSelected, "Ctrl+Tab should move selection to Second Tab");
+                Button secondTabButton = FindElement.ByName<Button>("SecondTabButton");
+                Verify.IsTrue(secondTabButton.HasKeyboardFocus, "Focus should move to the content of the Second Tab");
+
+                // Ctrl+Shift+Tab to the first tab:
+                KeyboardHelper.PressKey(Key.Tab, ModifierKey.Control | ModifierKey.Shift);
+                Verify.IsTrue(firstTab.IsSelected, "Ctrl+Shift+Tab should move selection to First Tab");
+                Verify.IsTrue(firstTabButton.HasKeyboardFocus, "Focus should move to the content of the First Tab");
+
+                // Ctrl+Shift+Tab to the last tab:
+                KeyboardHelper.PressKey(Key.Tab, ModifierKey.Control | ModifierKey.Shift);
+                Verify.IsTrue(lastTab.IsSelected, "Ctrl+Shift+Tab should move selection to Last Tab");
+                Verify.IsTrue(lastTab.HasKeyboardFocus, "Focus should move to the last tab (since it has no focusable content)");
+
+                // Ctrl+Tab to the first tab:
+                KeyboardHelper.PressKey(Key.Tab, ModifierKey.Control);
+                Verify.IsTrue(firstTab.IsSelected, "Ctrl+Tab should move selection to First Tab");
+                Verify.IsTrue(firstTab.HasKeyboardFocus, "Focus should move to the first tab");
+
+                KeyboardHelper.PressKey(Key.Up);
+                Verify.IsTrue(firstTab.HasKeyboardFocus, "Up key should not move focus");
+
+                KeyboardHelper.PressKey(Key.Down);
+                Verify.IsTrue(firstTab.HasKeyboardFocus, "Down key should not move focus");
+
+                KeyboardHelper.PressKey(Key.Right);
+                Verify.IsTrue(secondTab.HasKeyboardFocus, "Right Key should move focus to the second tab");
+
+                KeyboardHelper.PressKey(Key.Left);
+                Verify.IsTrue(firstTab.HasKeyboardFocus, "Left Key should move focus to the first tab");
+
+                addButton.SetFocus();
+                Verify.IsTrue(addButton.HasKeyboardFocus, "AddButton should have keyboard focus");
+
+                KeyboardHelper.PressKey(Key.Left);
+                Verify.IsTrue(lastTab.HasKeyboardFocus, "Left Key from AddButton should move focus to last tab");
+
+                KeyboardHelper.PressKey(Key.Right);
+                Verify.IsTrue(addButton.HasKeyboardFocus, "Right Key from Last Tab should move focus to Add Button");
+
+                firstTab.SetFocus();
+
+                // Ctrl+f4 to close the tab:
                 Log.Comment("Verify that pressing ctrl-f4 closes the tab");
-                KeyboardHelper.PressDownModifierKey(ModifierKey.Control);
-                TextInput.SendText("{F4}");
-                KeyboardHelper.ReleaseModifierKey(ModifierKey.Control);
+                KeyboardHelper.PressKey(Key.F4, ModifierKey.Control);
                 Wait.ForIdle();
 
-                ElementCache.Refresh();
-                UIObject firstTab = TryFindElement.ByName("FirstTab");
-                Verify.IsNull(firstTab);
+                VerifyElement.NotFound("FirstTab", FindBy.Name);
+            }
+        }
+
+
+        [TestMethod]
+        public void GamePadTest()
+        {
+            using (var setup = new TestSetupHelper("TabView Tests"))
+            {
+                Button tabContent = FindElement.ByName<Button>("FirstTabButton");
+                Button backButton = FindElement.ById<Button>("__BackButton");
+                TabItem firstTab = FindElement.ByName<TabItem>("FirstTab");
+                TabItem secondTab = FindElement.ByName<TabItem>("SecondTab");
+                TabItem lastTab = FindElement.ByName<TabItem>("LastTab");
+                Button addButton = FindElement.ById<Button>("AddButton");
+
+                firstTab.SetFocus();
+
+                GamepadHelper.PressButton(null, GamepadButton.LeftThumbstickRight);
+                Wait.ForIdle();
+                Verify.IsTrue(secondTab.HasKeyboardFocus, "GamePad Right should move focus to second tab");
+
+                GamepadHelper.PressButton(null, GamepadButton.LeftThumbstickLeft);
+                Wait.ForIdle();
+                Verify.IsTrue(firstTab.HasKeyboardFocus, "GamePad Left should move focus to first tab");
+
+                GamepadHelper.PressButton(null, GamepadButton.LeftThumbstickDown);
+                Wait.ForIdle();
+                Verify.IsTrue(tabContent.HasKeyboardFocus, "GamePad Down should move focus to tab content");
+
+                GamepadHelper.PressButton(null, GamepadButton.LeftThumbstickUp);
+                Wait.ForIdle();
+                Verify.IsTrue(firstTab.HasKeyboardFocus, "GamePad Up should move focus to tabs");
+
+                GamepadHelper.PressButton(null, GamepadButton.LeftThumbstickUp);
+                Wait.ForIdle();
+                Verify.IsTrue(backButton.HasKeyboardFocus, "GamePad Up should move to back button");
             }
         }
 
@@ -293,7 +424,7 @@ namespace Windows.UI.Xaml.Tests.MUXControls.InteractionTests
         {
             using (var setup = new TestSetupHelper("TabView Tests"))
             {
-                TextBlock dragOutsideTextBlock = FindElement.ByName<TextBlock>("TabDraggedOutsideTextBlock");
+                TextBlock dragOutsideTextBlock = FindElement.ByName<TextBlock>("TabDroppedOutsideTextBlock");
                 Verify.AreEqual(dragOutsideTextBlock.DocumentText, "");
 
                 Log.Comment("Drag tab out");
@@ -312,16 +443,16 @@ namespace Windows.UI.Xaml.Tests.MUXControls.InteractionTests
             using (var setup = new TestSetupHelper("TabView Tests"))
             {
                 Log.Comment("If the app sets custom tooltip text, it should be preserved.");
-                VerifyTooltipText("GetTab0ToolTipButton", "Tab0ToolTipTextBlock", "Custom Tooltip");
+                PressButtonAndVerifyText("GetTab0ToolTipButton", "Tab0ToolTipTextBlock", "Custom Tooltip");
 
                 Log.Comment("If the app does not set a custom tooltip, it should be the same as the header text.");
-                VerifyTooltipText("GetTab1ToolTipButton", "Tab1ToolTipTextBlock", "Shop");
+                PressButtonAndVerifyText("GetTab1ToolTipButton", "Tab1ToolTipTextBlock", "Shop");
 
                 Button changeShopTextButton = FindElement.ByName<Button>("ChangeShopTextButton");
                 changeShopTextButton.InvokeAndWait();
 
                 Log.Comment("If the tab's header changes, the tooltip should update.");
-                VerifyTooltipText("GetTab1ToolTipButton", "Tab1ToolTipTextBlock", "Changed");
+                PressButtonAndVerifyText("GetTab1ToolTipButton", "Tab1ToolTipTextBlock", "Changed");
             }
         }
 
@@ -334,17 +465,17 @@ namespace Windows.UI.Xaml.Tests.MUXControls.InteractionTests
                 customTooltipButton.InvokeAndWait();
 
                 Log.Comment("If the app updates the tooltip, it should change to their custom one.");
-                VerifyTooltipText("GetTab1ToolTipButton", "Tab1ToolTipTextBlock", "Custom");
+                PressButtonAndVerifyText("GetTab1ToolTipButton", "Tab1ToolTipTextBlock", "Custom");
 
                 Button changeShopTextButton = FindElement.ByName<Button>("ChangeShopTextButton");
                 changeShopTextButton.InvokeAndWait();
 
                 Log.Comment("The tooltip should not update if the header changes.");
-                VerifyTooltipText("GetTab1ToolTipButton", "Tab1ToolTipTextBlock", "Custom");
+                PressButtonAndVerifyText("GetTab1ToolTipButton", "Tab1ToolTipTextBlock", "Custom");
             }
         }
 
-        public void VerifyTooltipText(String buttonName, String textBlockName, String expectedText)
+        public void PressButtonAndVerifyText(String buttonName, String textBlockName, String expectedText)
         {
             Button button = FindElement.ByName<Button>(buttonName);
             button.InvokeAndWait();

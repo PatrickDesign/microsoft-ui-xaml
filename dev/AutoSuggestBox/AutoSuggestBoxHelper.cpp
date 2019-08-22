@@ -4,11 +4,8 @@
 #include <pch.h>
 #include <common.h>
 #include "AutoSuggestBoxHelper.h"
-#include "AutoSuggestBoxHelper.properties.h"
 #include "DispatcherHelper.h"
-#include "Converters.h"
-
-using CornerRadiusFilterType = CornerRadiusFilterConverter::FilterType;
+#include "CornerRadiusFilterConverter.h"
 
 static constexpr auto c_popupName = L"SuggestionsPopup"sv;
 static constexpr auto c_popupBorderName = L"SuggestionsContainer"sv;
@@ -50,7 +47,7 @@ void AutoSuggestBoxHelper::ClearProperties()
 // The corner radius needs to be updated dynamically depending on whether the suggestion list is opening up or down.
 // Xaml is not lifted yet when we implementing this feature so we don't have access to AutoSuggestBox code.
 // Creating this attached property to help us plug in some extra logic without touching the actual code.
-void AutoSuggestBoxHelper::OnApplyDynamicCornerRadiusPropertyChanged(
+void AutoSuggestBoxHelper::OnKeepInteriorCornersSquarePropertyChanged(
     const winrt::DependencyObject& sender,
     const winrt::DependencyPropertyChangedEventArgs& args)
 {
@@ -107,12 +104,11 @@ void AutoSuggestBoxHelper::OnAutoSuggestBoxLoaded(const winrt::IInspectable& sen
 void AutoSuggestBoxHelper::UpdateCornerRadius(const winrt::AutoSuggestBox& autoSuggestBox, bool isPopupOpen)
 {
     auto textBoxRadius = unbox_value<winrt::CornerRadius>(ResourceLookup(autoSuggestBox, box_value(c_controlCornerRadiusKey)));
-    auto popupRadius = textBoxRadius;
+    auto popupRadius = unbox_value<winrt::CornerRadius>(ResourceLookup(autoSuggestBox, box_value(c_overlayCornerRadiusKey)));
 
     if (winrt::IControl7 autoSuggextBoxControl7 = autoSuggestBox)
     {
         textBoxRadius = autoSuggextBoxControl7.CornerRadius();
-        popupRadius = autoSuggextBoxControl7.CornerRadius();
     }
 
     if (isPopupOpen)
@@ -120,10 +116,10 @@ void AutoSuggestBoxHelper::UpdateCornerRadius(const winrt::AutoSuggestBox& autoS
         auto const isOpenDown = IsPopupOpenDown(autoSuggestBox);
         auto cornerRadiusConverter = winrt::make_self<CornerRadiusFilterConverter>();
 
-        auto popupRadiusFilter = isOpenDown ? CornerRadiusFilterType::Bottom : CornerRadiusFilterType::Top;
+        auto popupRadiusFilter = isOpenDown ? winrt::CornerRadiusFilterKind::Bottom : winrt::CornerRadiusFilterKind::Top;
         popupRadius = cornerRadiusConverter->Convert(popupRadius, popupRadiusFilter);
 
-        auto textBoxRadiusFilter = isOpenDown ? CornerRadiusFilterType::Top : CornerRadiusFilterType::Bottom;
+        auto textBoxRadiusFilter = isOpenDown ? winrt::CornerRadiusFilterKind::Top : winrt::CornerRadiusFilterKind::Bottom;
         textBoxRadius = cornerRadiusConverter->Convert(textBoxRadius, textBoxRadiusFilter);
     }
 
